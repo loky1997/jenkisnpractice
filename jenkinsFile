@@ -1,0 +1,42 @@
+pipeline {
+  agent {
+    docker {
+      image 'abhishekf5/maven-abhishek-docker-agent:v1'
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock' // mount Docker socket to access the host's Docker daemon
+    }
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        sh 'echo passed'
+        git branch: 'main', url: 'https://github.com/loky1997/Jenkins-Zero-To-Hero.git'
+      }
+    }
+    stage('Build and Test') {
+      steps {
+        sh 'ls -ltr'
+        // build the project and create a JAR file
+        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
+      }
+    }
+    stage('Static Code Analysis') {
+      environment {
+        SONAR_URL = "http://13.233.96.59:9000"
+      }
+      steps {
+        withCredentials([string(credentialsId: 'sonarpassword', variable: 'SONAR_AUTH_TOKEN')]) {
+          sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}'
+        }
+      }
+    }
+    stage('Build and Push Docker Image') {
+      steps {
+            sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t lokeshhs591/ultimate-cicd-abhishek:${BUILD_NUMBER} .'
+                withCredentials([string(credentialsId: 'DOCKER_HUB', variable: 'DOCKERHUB')]) {
+                sh 'docker login -u lokeshhs591 -p ${DOCKERHUB}'
+                sh 'docker push lokeshhs591/ultimate-cicd-abhishek:${BUILD_NUMBER}'
+            }
+        }
+      }
+    }
+  }
